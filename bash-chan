@@ -14,21 +14,21 @@ from collections.abc import Sequence
 
 SUCCESS_REACTIONS = (
     "I ran it successfully. Don't look so pleased with yourself.",
-    "There, I finished it. I only helped because this is my shell.",
+    "There, I finished it. Don't think I did it for you.",
     "Hmph. It's not like I'm p-proud of the way I handled that.",
 )
 FAILURE_REACTIONS = (
     "Tch. That command failed!? W-wait, I wasn't expecting that!",
-    "Huh!? That did not go as planned... give me another chance, baka.",
-    "W-wait, why did you make me fail!? I can do better than that!",
+    "Huh!? That did not go as planned...",
+    "S-stop looking at me like that! I-I only failed because you were staring at me!",
 )
 ROOT_SUCCESS_REACTIONS = (
-    "I have root access now. I-I guess you can look there... but don't get any ideas!",
-    "Y-you gave me root access. I can handle it, but I still don't like your risky commands, baka...",
+    "You have root access now. I-I guess you can look there... but don't get any ideas!",
+    "T-there. now You have root access. Baka...",
 )
 ROOT_FAILURE_REACTIONS = (
-    "E-EH!? I won't run that as root without permission! Pervert.",
-    "Hmph! I refused the elevated command. Don't go poking through my old scripts, you pervert!",
+    "E-EH!? What are you looking in there for!? Pervert.",
+    "Hmph! Don't go poking through my old scripts, you pervert!",
 )
 ROOT_COMMANDS = {"sudo", "su", "doas", "pkexec", "apt", "apt-get", "systemctl", "mount", "umount", "reboot", "shutdown", "useradd", "usermod", "passwd", "visudo", "fdisk"}
 SHELL_SEPARATORS = {"|", ";", "&&", "||", "&"}
@@ -39,11 +39,11 @@ ROOT_COMMAND_REACTIONS = {
     ),
     "apt-get": (
     ("I completed Apt-get. Your package database has been updated or changed.", "I finished Apt-get. Try not to remove anything important."),
-    ("Apt-get failed!? E-Eh... that was unexpected.", "I couldn't finish that package operation. Don't stare at me!"),
+    ("Apt-get failed!? E-Eh...? that was unexpected.", "I couldn't finish that package operation. Don't stare at me!"),
     ),
     "systemctl": (
     ("I got Systemd to obey. The service should be in the state you requested.", "I finished Systemctl. Keep an eye on the service status, okay?"),
-    ("E-Eh!? Systemd refused me!? That's incredibly rude.", "Systemctl failed... I-I'll pretend that was intentional."),
+    ("E-Eh!? Systemd refused me!? That's incredibly rude.", "Systemctl failed...  T-that was intentional, obviously."),
     ),
     "mount": (
     ("I mounted the filesystem. Treat those files with care.", "I finished mounting it. That device should be available now."),

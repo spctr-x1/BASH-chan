@@ -2,15 +2,9 @@
 
 > A tsundere Linux shell wrapper that reacts to your commands.
 
-## What It Does
+## Functions
 
-- Runs commands through the user's shell with normal arguments and flags
-- Chooses reactions based on command families
-- Has separate success and failure quotes
-- Includes navigation and filesystem reactions
-- Detects root-oriented commands and uses separate elevated-access reactions
-- Supports one-shot commands and an interactive prompt
-- Preserves the wrapped command's exit code for scripts and command chains
+Simply put, this shell wrapper allows you to work in your BASH terminal as normal, but with a tsundere companion to keep you company during your work. She will respond to your commands, and is made to respond according to the command sent as well as the result. In the future, I hope to add more feature, like minigames or ascii visuals to show the various reactions bash chan can give off.
 
 ## Quick Start
 
