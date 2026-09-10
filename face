@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""Draw a small animated face without taking ownership of terminal input."""
+
+from __future__ import annotations
+
+import shutil
+import select
+import os
+import signal
+import sys
+import time
+
+from dialogue_handler import FACE_BY_EMOTION
+
+
+NEUTRAL_FACE = "(｡•ㅅ•｡)"
+BLINK_FACE = "(｡-ㅅ-｡)"
+OTHER_EXPRESSIONS = ("(｡•ㅅ•｡)♡", "(｡•́︿•̀｡)")
+REACTION_FACES = FACE_BY_EMOTION
+FRAME_INTERVAL = 0.1
+BLINK_INTERVAL = 2.8
+BLINK_DURATION = 0.18
+
+
+def draw(face: str) -> None:
+	columns = shutil.get_terminal_size(fallback=(80, 24)).columns
+	face = face[: max(columns - 1, 1)]
+	column = max(columns - len(face) + 1, 1)
+	# Save the user's cursor, draw in the top-right corner, then restore it.
+	sys.stdout.write(f"\0337\033[1;{column}H\033[2K{face}\0338")
+	sys.stdout.flush()
+
+
+def clear() -> None:
+	# Remove the face from the top row when the helper is shutting down.
+	sys.stdout.write("\0337\033[1;1H\033[2K\0338")
+	sys.stdout.flush()
+
+
+def stop(_signum: int, _frame: object) -> None:
+	clear()
+	raise SystemExit(0)
+
+
+def main() -> int:
+	signal.signal(signal.SIGTERM, stop)
+	signal.signal(signal.SIGINT, stop)
+	started_at = time.monotonic()
+	reaction_face = None
+	draw(NEUTRAL_FACE)
+	ready_fd = os.environ.pop("BASH_CHAN_FACE_READY_FD", None)
+	if ready_fd is not None:
+		# Tell bash-chan that the renderer has drawn its first frame.
+		os.write(int(ready_fd), b"ready")
+		os.close(int(ready_fd))
+	while True:
+		# The parent sends an emotion category here; stdin is never the user's keyboard.
+		readable, _, _ = select.select([sys.stdin], [], [], FRAME_INTERVAL)
+		if readable:
+			message = sys.stdin.readline().strip()
+			if not message:
+				return 0
+			reaction_face = REACTION_FACES.get(message)
+
+		elapsed = time.monotonic() - started_at
+		if reaction_face is not None:
+			# Keep this emotion visible until the next command result arrives.
+			draw(reaction_face)
+		else:
+			reaction_face = None
+			# Idle mode alternates between the neutral face and a short blink.
+			blinking = elapsed % BLINK_INTERVAL < BLINK_DURATION
+			draw(BLINK_FACE if blinking else NEUTRAL_FACE)
+
+
+if __name__ == "__main__":
+	raise SystemExit(main())
+  
