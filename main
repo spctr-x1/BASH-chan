@@ -339,12 +339,13 @@ def start_face() -> subprocess.Popen[str] | None:
     """Start the independent face animation when attached to a terminal."""
     if not sys.stdout.isatty():
         return None
+    executable = pathlib.Path(sys.executable if getattr(sys, "frozen", False) else __file__)
     ready_read, ready_write = os.pipe()
     environment = os.environ.copy()
     environment["BASH_CHAN_FACE_READY_FD"] = str(ready_write)
     try:
         face_process = subprocess.Popen(
-            [sys.executable, str(pathlib.Path(__file__)), "--face"],
+            [str(executable), "--face"],
             stdin=subprocess.PIPE,
             stdout=sys.stdout,
             stderr=sys.stderr,
