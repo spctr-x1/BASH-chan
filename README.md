@@ -51,3 +51,10 @@ Run one command directly with:
 ```bash
 main echo "hello"
 ```
+
+## Packages
+
+Download the latest platform archive from the [GitHub Releases](https://github.com/spctr-x1/bash-chan-CLI/releases) page:
+
+- Linux: `bash-chan-cli-linux-x86_64.tar.gz`
+- Windows: `bash-chan-cli-windows-x86_64.zip`
