@@ -1,6 +1,8 @@
 name: Build release executables
 
 on:
+  pull_request:
+    branches: [2nd]
   workflow_dispatch:
     inputs:
       tag:
@@ -46,7 +48,7 @@ jobs:
       - name: Publish assets to release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ inputs.tag || 'v0.2.0' }}
         run: |
           mkdir -p release-assets
           find assets -type f -exec cp {} release-assets/ \;
