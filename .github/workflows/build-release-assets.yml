@@ -65,6 +65,8 @@ jobs:
         run: |
           mkdir -p release-assets
           find assets -type f -exec cp {} release-assets/ \;
-          # Create release if it doesn't exist
-          gh release view "$TAG" > /dev/null 2>&1 || gh release create "$TAG" --draft
+          # Create release if it doesn't exist (with error handling)
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            gh release create "$TAG" --draft || echo "Failed to create release for tag: $TAG"
+          fi
           gh release upload "$TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --clobber
