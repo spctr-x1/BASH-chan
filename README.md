@@ -53,9 +53,6 @@ Run one command directly with:
 ```bash
 main echo "hello"
 ```
-## Important Note
-I have only created unique dialogue for some of the common commands used in bash. If there is no specified dialogue associated with a command, it should fall back to a default set of dialogue.
-Additionally, Windows executable is untested for now. Python does run in cmd and ps so it should work in those too but many cmdlets are obviously different.
 ## Packages
 
 Download the latest platform archive from the [GitHub Releases](https://github.com/spctr-x1/bash-chan-CLI/releases) page:
