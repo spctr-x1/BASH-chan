@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""Translate common CMD, PowerShell, and Linux command names to canonical names."""
+
+from __future__ import annotations
+
+import sys
+
+
+COMMAND_SYNONYMS = {
+	"sudo": ("runas", "sudo.exe"),
+	"su": ("runas",),
+	"doas": (),
+	"pkexec": (),
+	"apt": ("apt-get", "aptitude", "dnf", "yum", "pacman", "zypper", "winget", "choco"),
+	"systemctl": ("service", "rc-service", "sc", "Get-Service"),
+	"mount": ("mountvol", "diskpart"),
+	"umount": ("unmount", "mountvol"),
+	"reboot": ("restart", "shutdown-r"),
+	"shutdown": ("poweroff", "halt", "shutdown-s"),
+	"useradd": ("adduser", "net-user-add"),
+	"usermod": ("net-user-mod",),
+	"passwd": ("chpasswd", "net-user-password"),
+	"visudo": ("sudoedit",),
+	"fdisk": ("cfdisk", "sfdisk", "diskpart"),
+	"echo": ("Write-Output", "Write-Host"),
+	"cat": ("type", "Get-Content", "gc"),
+	"grep": ("findstr", "Select-String", "sls"),
+	"awk": ("gawk", "ForEach-Object", "%"),
+	"sort": ("Sort-Object",),
+	"wc": ("Measure-Object", "measure"),
+	"touch": ("New-Item", "ni"),
+	"cp": ("copy", "xcopy", "robocopy", "Copy-Item", "ci"),
+	"mv": ("move", "Move-Item", "mi"),
+	"chmod": ("icacls", "Set-Acl"),
+	"tar": ("Compress-Archive", "Expand-Archive"),
+	"ps": ("tasklist", "Get-Process", "gps"),
+	"kill": ("taskkill", "Stop-Process", "spps"),
+	"which": ("where", "Get-Command", "gcm"),
+	"man": ("help", "Get-Help", "man"),
+	"ssh": ("plink",),
+	"ping": (),
+	"ip": ("ifconfig", "ipconfig", "Get-NetIPConfiguration"),
+	"wget": ("Invoke-WebRequest", "iwr", "bitsadmin"),
+	"journalctl": ("wevtutil", "Get-WinEvent"),
+	"python": ("python3", "py"),
+	"node": ("nodejs",),
+	"docker": ("podman",),
+	"curl": (),
+	"make": ("gmake", "nmake", "msbuild"),
+	"ls": ("dir", "Get-ChildItem", "gci", "ll"),
+	"rm": ("del", "erase", "Remove-Item", "ri"),
+	"cd": ("Set-Location", "sl"),
+	"pwd": ("Get-Location", "gl"),
+	"pushd": ("Push-Location", "push-location"),
+	"popd": ("Pop-Location", "pop-location"),
+	"find": ("Get-ChildItem-Recurse",),
+	"tree": (),
+	"mkdir": ("md", "New-Item-Directory"),
+	"rmdir": ("rd", "Remove-Item-Directory"),
+	"du": ("diskusage", "Get-ChildItem-Measure"),
+	"df": ("Get-PSDrive", "fsutil"),
+}
+
+
+def _command_name(token: str) -> str:
+	"""Return a command token without its path, quotes, or Windows extension."""
+	name = token.strip().strip('"\'')
+	name = name.replace("\\", "/").rsplit("/", maxsplit=1)[-1]
+	lowered_name = name.lower()
+	for extension in (".exe", ".cmd", ".bat", ".ps1"):
+		if lowered_name.endswith(extension):
+			return lowered_name[: -len(extension)]
+	return lowered_name
+
+
+COMMAND_ALIASES = {
+	alias.lower(): command
+	for command, aliases in COMMAND_SYNONYMS.items()
+	for alias in (command, *aliases)
+}
+
+
+def canonical_command(command: str) -> str | None:
+	"""Return the canonical command name for a command or command line."""
+	token = command.strip().split(maxsplit=1)[0] if command.strip() else ""
+	return COMMAND_ALIASES.get(_command_name(token))
+
+
+def translate_command(command: str) -> str:
+	"""Replace only the command name and preserve the command's arguments."""
+	leading_space_count = len(command) - len(command.lstrip())
+	stripped_command = command.lstrip()
+	if not stripped_command:
+		return command
+
+	parts = stripped_command.split(maxsplit=1)
+	canonical = canonical_command(parts[0])
+	if canonical is None:
+		return command
+
+	translated = canonical
+	if len(parts) == 2:
+		translated += f" {parts[1]}"
+	return " " * leading_space_count + translated
+
+
+def main() -> int:
+	command = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else sys.stdin.readline().rstrip("\n")
+	print(translate_command(command))
+	return 0
+
+
+if __name__ == "__main__":
+	raise SystemExit(main())

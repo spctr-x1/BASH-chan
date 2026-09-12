@@ -1,0 +1,67 @@
+name: Build release executables
+
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [2nd]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to receive the executables
+        required: true
+        default: v0.2.0
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: bash-chan-linux-x86_64
+            asset: bash-chan-linux-x86_64
+          - os: windows-latest
+            artifact: bash-chan-windows-x86_64
+            asset: bash-chan-windows-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pyinstaller
+      - name: Test source CLI and dependency bootstrap
+        run: python scripts/main --help
+      - name: Build executable
+        run: python -m PyInstaller --onefile --paths scripts --name ${{ matrix.asset }} scripts/main
+      - name: Test Linux executable
+        if: runner.os == 'Linux'
+        run: ./dist/${{ matrix.asset }} echo release-smoke
+      - name: Test Windows executable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\dist\${{ matrix.asset }}.exe echo release-smoke
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.asset }}${{ runner.os == 'Windows' && '.exe' || '' }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+      - name: Publish assets to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          mkdir -p release-assets
+          find assets -type f -exec cp {} release-assets/ \;
+          gh release upload "$TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --clobber
