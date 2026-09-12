@@ -15,7 +15,6 @@ from dialogue_handler import FACE_BY_EMOTION
 
 NEUTRAL_FACE = "(｡•ㅅ•｡)"
 BLINK_FACE = "(｡-ㅅ-｡)"
-OTHER_EXPRESSIONS = ("(｡•ㅅ•｡)♡", "(｡•́︿•̀｡)")
 REACTION_FACES = FACE_BY_EMOTION
 FRAME_INTERVAL = 0.1
 BLINK_INTERVAL = 2.8

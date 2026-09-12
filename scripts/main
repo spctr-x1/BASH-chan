@@ -19,31 +19,9 @@ import sys
 import time
 from collections.abc import Sequence
 
-FACE_BY_EMOTION = {
-    "surprised": "(｡⊙д⊙｡)",
-    "angry": "(｡•̀へ•́｡)",
-    "annoyed": "(｡•́︿•̀｡)",
-    "happy": "(｡•ㅅ•｡)♡",
-    "sad": "(｡•́︿•̀｡)｡",
-}
-EMOTION_MARKERS = {
-    "angry": ("pervert", "idiot", "loser", "rude"),
-    "annoyed": ("hmph", "ugh"),
-    "surprised": ("w-wait", "e-eh", "!?", "huh", "eh?"),
-    "happy": ("worked", "success", "finished", "completed", "found", "ready", "passed"),
-    "sad": ("failed", "couldn't", "could not", "refused", "rejected", "wrong", "disappointing", "nothing"),
-}
+from dialogue_handler import FACE_BY_EMOTION, emotion_for
 
 
-def emotion_for(quote: str, exit_code: int) -> str:
-    """Assign an emotion to an existing command quote without changing it."""
-    lowered_quote = quote.lower()
-    for emotion in ("angry", "annoyed", "surprised", "sad", "happy"):
-        if any(marker in lowered_quote for marker in EMOTION_MARKERS[emotion]):
-            return emotion
-    if exit_code != 0:
-        return "sad"
-    return "happy"
 ROOT_SUCCESS_REACTIONS = (
     "You have root access now. I-I guess you can look there... but don't get any ideas!",
     "T-there. now You have root access. Baka...",
@@ -86,6 +64,28 @@ ROOT_COMMAND_REACTIONS = {
     "passwd": (
     ("The password was updated. Keep it secret this time.", "Passwd completed. Do not write the new password on a sticky note."),
     ("W-wait, the password was not changed!?", "Passwd failed!? Hmph, I definitely tried my best."),
+    ),
+}
+FAILURE_REACTIONS = {
+    "syntax": (
+        "You don't even know how to use that? Pfft, amateur",
+        "Huh...? Hmph, looks like someone doesn't know proper syntax. How pathetic.",
+    ),
+    "missing_arguments": (
+        "Ugh, you're missing something. Try again, loser",
+        "Honestly, you're hopeless. How am I supposed to help you with that? N-not that I wanted to...",
+    ),
+    "too_many_arguments": (
+        "Eh...? Someone's a bit talkative...",
+        "Seriously? Do you really not know how to use this? Heh, pathetic.",
+    ),
+    "invalid_flag": (
+        "What even is that? Don't waste my time loser.",
+        "Ugh, you are such an idiot. Learn to use the right flags already.",
+    ),
+    "unknown_command": (
+        "Ummm. What?",
+        "Ugh what nonsense are you spouting now?",
     ),
 }
 COMMAND_REACTIONS = {
@@ -240,16 +240,63 @@ COMMAND_REACTIONS = {
     ),
 }
 
+KNOWN_COMMANDS = ROOT_COMMANDS | set(COMMAND_REACTIONS)
+COMMAND_ARGUMENT_LIMITS = {
+    "pwd": (0, 0),
+    "cd": (0, 1),
+    "pushd": (0, 1),
+    "popd": (0, 0),
+    "tree": (0, 1),
+    "ping": (1, None),
+    "ssh": (1, None),
+    "find": (1, None),
+    "mkdir": (1, None),
+    "rmdir": (1, None),
+    "cp": (2, None),
+    "mv": (2, None),
+    "chmod": (2, None),
+}
+
 #----------------------#
 #Live facial reactions
 #----------------------#
 
+def failure_kind(command_parts: list[str], exit_code: int, *, parse_failed: bool) -> str | None:
+    """Classify common command-line mistakes without changing command execution."""
+    if parse_failed:
+        return "syntax"
+    if not command_parts or exit_code == 0:
+        return None
+
+    command_name = command_parts[0].rsplit("/", maxsplit=1)[-1].lower()
+    arguments = command_parts[1:]
+    if exit_code == 127 and command_name not in KNOWN_COMMANDS:
+        return "unknown_command"
+    if any(argument.startswith("-") for argument in arguments) and exit_code in {1, 2}:
+        return "invalid_flag"
+
+    argument_limits = COMMAND_ARGUMENT_LIMITS.get(command_name)
+    if argument_limits is not None:
+        minimum, maximum = argument_limits
+        if len(arguments) < minimum:
+            return "missing_arguments"
+        if maximum is not None and len(arguments) > maximum:
+            return "too_many_arguments"
+    return None
+
+
 def reaction(command: str, exit_code: int, *, rng: random.Random) -> str:
     """Choose a command-aware reaction without changing the command's result."""
+    parse_failed = False
     try:
         command_parts = shlex.split(command)
     except ValueError:
         command_parts = []
+        parse_failed = True
+
+    kind = failure_kind(command_parts, exit_code, parse_failed=parse_failed)
+    if kind is not None:
+        return rng.choice(FAILURE_REACTIONS[kind])
 
     command_name = command_parts[0].rsplit("/", maxsplit=1)[-1] if command_parts else ""
     root_command_positions = (0,) + tuple(
@@ -403,7 +450,7 @@ def interactive_loop(*, rng: random.Random) -> int:
     face_process = start_face()
     sys.stdout.write("\033[?25h")
     sys.stdout.flush()
-    print("Hmph. I'm your shell now. Type a command, or press Ctrl-D to leave.")
+    print("Hmph. Fine, I'll help you a little bit. Type a command, or press Ctrl-D to leave.")
     try:
         while True:
             try:
