@@ -8,7 +8,6 @@ import getpass
 import os
 import pathlib
 import random
-import readline
 import select
 import shlex
 import shutil
@@ -18,6 +17,14 @@ import subprocess
 import sys
 import time
 from collections.abc import Sequence
+
+try:
+    import readline
+except ImportError:
+    if os.name != "nt" or getattr(sys, "frozen", False):
+        raise
+    subprocess.run([sys.executable, "-m", "pip", "install", "pyreadline3"], check=True)
+    import readline
 
 from dialogue_handler import FACE_BY_EMOTION, emotion_for
 
@@ -298,7 +305,7 @@ def reaction(command: str, exit_code: int, *, rng: random.Random) -> str:
     if kind is not None:
         return rng.choice(FAILURE_REACTIONS[kind])
 
-    command_name = command_parts[0].rsplit("/", maxsplit=1)[-1] if command_parts else ""
+    command_name = command_parts[0].rsplit("/", maxsplit=1)[-1].lower() if command_parts else ""
     root_command_positions = (0,) + tuple(
         index + 1
         for index, part in enumerate(command_parts[:-1])
@@ -306,15 +313,15 @@ def reaction(command: str, exit_code: int, *, rng: random.Random) -> str:
     )
     if any(
         index < len(command_parts)
-        and command_parts[index].rsplit("/", maxsplit=1)[-1] in ROOT_COMMANDS
+        and command_parts[index].rsplit("/", maxsplit=1)[-1].lower() in ROOT_COMMANDS
         for index in root_command_positions
     ):
         root_command = next(
             (
-                command_parts[index].rsplit("/", maxsplit=1)[-1]
+                command_parts[index].rsplit("/", maxsplit=1)[-1].lower()
                 for index in root_command_positions
                 if index < len(command_parts)
-                and command_parts[index].rsplit("/", maxsplit=1)[-1] in ROOT_COMMAND_REACTIONS
+                and command_parts[index].rsplit("/", maxsplit=1)[-1].lower() in ROOT_COMMAND_REACTIONS
             ),
             None,
         )
@@ -384,7 +391,7 @@ def history_path() -> pathlib.Path:
 
 def start_face() -> subprocess.Popen[str] | None:
     """Start the independent face animation when attached to a terminal."""
-    if not sys.stdout.isatty():
+    if os.name != "posix" or not sys.stdout.isatty():
         return None
     executable = pathlib.Path(sys.executable if getattr(sys, "frozen", False) else __file__)
     ready_read, ready_write = os.pipe()

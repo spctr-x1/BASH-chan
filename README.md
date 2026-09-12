@@ -14,7 +14,7 @@ Optionally install it for your user:
 
 ```bash
 mkdir -p ~/.local/bin
-ln -s "$PWD/main" ~/.local/bin/main
+ln -s "$PWD/scripts/main" ~/.local/bin/main
 ```
 
 Ensure `~/.local/bin` is in `PATH`, then run:
@@ -22,6 +22,8 @@ Ensure `~/.local/bin` is in `PATH`, then run:
 ```bash
 main
 ```
+
+When running from source on Windows, `pyreadline3` is installed automatically if the Python interpreter does not provide `readline`.
 
 ## Start On Terminal Launch
 
