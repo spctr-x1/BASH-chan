@@ -173,7 +173,7 @@ COMMAND_REACTIONS = {
     ("The download failed!? Ugh now I have to do it again.", "H-how disappointing. Nothing here."),
     ),
     "journalctl": (
-    ("The journal is open. Logs do not lie, so pay attention.", "Journalctl displayed the records. There may be a clue in there."),
+    ("Are you trying to read my journal...?.", "Journalctl displayed the records. There may be a clue in there."),
     ("The journal won't open!? W-wait, I wanted to know what happened...", "Journalctl failed!? Even the logs are keeping secrets."),
     ),
     "python": (
