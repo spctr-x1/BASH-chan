@@ -35,7 +35,7 @@ ROOT_SUCCESS_REACTIONS = (
 )
 ROOT_FAILURE_REACTIONS = (
     "E-EH!? What are you looking in there for!? Pervert.",
-    "Hmph! Don't go poking through my old scripts, you pervert!",
+    "Hmph! Don't go poking through there, you pervert!",
 )
 ROOT_COMMANDS = {"sudo", "su", "doas", "pkexec", "apt", "systemctl", "mount", "umount", "reboot", "shutdown", "useradd", "usermod", "passwd", "visudo", "fdisk"}
 SHELL_SEPARATORS = {"|", ";", "&&", "||", "&"}
