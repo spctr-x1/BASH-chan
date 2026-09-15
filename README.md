@@ -1,80 +1,60 @@
 # bash-chan CLI
 
-> A tsundere Linux shell wrapper that reacts to your commands.
+A shell wrapper that reacts to command results with categorized expressions.
 
-## What It Does
+## Install
 
-- Runs commands through the user's shell with normal arguments and flags
-- Chooses reactions based on command families
-- Has separate success and failure quotes
-- Includes navigation and filesystem reactions
-- Detects root-oriented commands and uses separate elevated-access reactions
-- Supports one-shot commands and an interactive prompt
-- Preserves the wrapped command's exit code for scripts and command chains
-
-## Quick Start
-
-Make the wrapper executable:
+Make the script executable:
 
 ```bash
-chmod +x bash-chan
+chmod +x main
 ```
 
-Run a command:
-
-```bash
-./bash-chan echo "hello world!"
-```
-
-Example output:
-
-```text
-hello, world
-
-[ bash-chan ] Hmph. It worked. Don't look so pleased with yourself.
-```
-
-## Interactive Mode
-
-Run `bash-chan` without a command to open an interactive session:
-
-```bash
-./bash-chan
-```
-
-Then enter commands at the `bash-chan [/your/current/directory]>` prompt. The directory shown in the prompt updates as your working directory changes. Use `exit`, `quit`, `Ctrl-D`, or `Ctrl-C` to leave.
-
-## Shell Compatibility
-
-Commands are passed through a shell, so regular shell syntax and flags work:
-
-```bash
-./bash-chan sh -c 'exit 1'
-./bash-chan git --version
-./bash-chan find . -name '*.py'
-```
-
-The wrapper returns the same exit code as the command it ran:
-
-```bash
-./bash-chan make && echo "build passed"
-```
-
-## Install For Your User
-
-Create a personal command link:
+Optionally install it for your user:
 
 ```bash
 mkdir -p ~/.local/bin
-ln -s "$PWD/bash-chan" ~/.local/bin/bash-chan
+ln -s "$PWD/main" ~/.local/bin/main
 ```
 
-Make sure `~/.local/bin` is included in your `PATH`, then run it from anywhere:
+Ensure `~/.local/bin` is in `PATH`, then run:
 
 ```bash
-bash-chan pwd
+main
 ```
 
-## Project Status
+## Start On Terminal Launch
 
-This is a lightweight prototype focused on personality-driven command feedback. The command execution path stays deliberately small, while the reaction catalog can grow independently as more Bash workflows are added.
+After installing it, add this block to `~/.bashrc`:
+
+```bash
+if [[ $- == *i* ]] && command -v main >/dev/null 2>&1 && [[ -z ${BASH_CHAN_STARTED:-} ]]; then
+	export BASH_CHAN_STARTED=1
+	main
+fi
+```
+
+Apply the change to the current shell with:
+
+```bash
+source ~/.bashrc
+```
+
+## Framework
+
+- `main`: runs commands, stores history, selects reactions, and manages the face process.
+- `dialogue_handler.py`: maps existing quotes to `surprised`, `angry`, `annoyed`, `happy`, or `sad` faces.
+- `face`: draws the top-right face and handles idle blinking.
+
+Run one command directly with:
+
+```bash
+main echo "hello"
+```
+
+## Packages
+
+Download the latest platform archive from the [GitHub Releases](https://github.com/spctr-x1/bash-chan-CLI/releases) page:
+
+- Linux: `bash-chan-cli-linux-x86_64.tar.gz`
+- Windows: `bash-chan-cli-windows-x86_64.zip`

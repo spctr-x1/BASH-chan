@@ -4,46 +4,64 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import os
+import pathlib
 import random
+import readline
+import select
 import shlex
+import shutil
+import signal
+import socket
 import subprocess
 import sys
+import time
 from collections.abc import Sequence
 
+FACE_BY_EMOTION = {
+    "surprised": "(｡⊙д⊙｡)",
+    "angry": "(｡•̀へ•́｡)",
+    "annoyed": "(｡•́︿•̀｡)",
+    "happy": "(｡•ㅅ•｡)♡",
+    "sad": "(｡•́︿•̀｡)｡",
+}
+EMOTION_MARKERS = {
+    "angry": ("pervert", "idiot", "loser", "rude"),
+    "annoyed": ("hmph", "ugh"),
+    "surprised": ("w-wait", "e-eh", "!?", "huh", "eh?"),
+    "happy": ("worked", "success", "finished", "completed", "found", "ready", "passed"),
+    "sad": ("failed", "couldn't", "could not", "refused", "rejected", "wrong", "disappointing", "nothing"),
+}
 
-SUCCESS_REACTIONS = (
-    "I ran it successfully. Don't look so pleased with yourself.",
-    "There, I finished it. I only helped because this is my shell.",
-    "Hmph. It's not like I'm p-proud of the way I handled that.",
-)
-FAILURE_REACTIONS = (
-    "Tch. That command failed!? W-wait, I wasn't expecting that!",
-    "Huh!? That did not go as planned... give me another chance, baka.",
-    "W-wait, why did you make me fail!? I can do better than that!",
-)
+
+def emotion_for(quote: str, exit_code: int) -> str:
+    """Assign an emotion to an existing command quote without changing it."""
+    lowered_quote = quote.lower()
+    for emotion in ("angry", "annoyed", "surprised", "sad", "happy"):
+        if any(marker in lowered_quote for marker in EMOTION_MARKERS[emotion]):
+            return emotion
+    if exit_code != 0:
+        return "sad"
+    return "happy"
 ROOT_SUCCESS_REACTIONS = (
-    "I have root access now. I-I guess you can look there... but don't get any ideas!",
-    "Y-you gave me root access. I can handle it, but I still don't like your risky commands, baka...",
+    "You have root access now. I-I guess you can look there... but don't get any ideas!",
+    "T-there. now You have root access. Baka...",
 )
 ROOT_FAILURE_REACTIONS = (
-    "E-EH!? I won't run that as root without permission! Pervert.",
-    "Hmph! I refused the elevated command. Don't go poking through my old scripts, you pervert!",
+    "E-EH!? What are you looking in there for!? Pervert.",
+    "Hmph! Don't go poking through my old scripts, you pervert!",
 )
-ROOT_COMMANDS = {"sudo", "su", "doas", "pkexec", "apt", "apt-get", "systemctl", "mount", "umount", "reboot", "shutdown", "useradd", "usermod", "passwd", "visudo", "fdisk"}
+ROOT_COMMANDS = {"sudo", "su", "doas", "pkexec", "apt", "systemctl", "mount", "umount", "reboot", "shutdown", "useradd", "usermod", "passwd", "visudo", "fdisk"}
 SHELL_SEPARATORS = {"|", ";", "&&", "||", "&"}
 ROOT_COMMAND_REACTIONS = {
     "apt": (
     ("I finished the Apt job. The package manager did what you asked, so don't break it now.", "I handled those packages. Hmph... Ubuntu may remain intact."),
     ("W-wait, Apt failed!? That wasn't supposed to happen!", "The package operation rejected me!? Hmph, I'll recover."),
     ),
-    "apt-get": (
-    ("I completed Apt-get. Your package database has been updated or changed.", "I finished Apt-get. Try not to remove anything important."),
-    ("Apt-get failed!? E-Eh... that was unexpected.", "I couldn't finish that package operation. Don't stare at me!"),
-    ),
     "systemctl": (
     ("I got Systemd to obey. The service should be in the state you requested.", "I finished Systemctl. Keep an eye on the service status, okay?"),
-    ("E-Eh!? Systemd refused me!? That's incredibly rude.", "Systemctl failed... I-I'll pretend that was intentional."),
+    ("E-Eh!? Systemd refused me!? That's incredibly rude.", "Systemctl failed...  T-that was intentional, obviously."),
     ),
     "mount": (
     ("I mounted the filesystem. Treat those files with care.", "I finished mounting it. That device should be available now."),
@@ -72,32 +90,24 @@ ROOT_COMMAND_REACTIONS = {
 }
 COMMAND_REACTIONS = {
     "echo": (
-    ("I sent the message. Hmph... your terminal can speak after all.", "Ugh why do I have to say this stuff for you?"),
+    ("W-What am I, your messenger!? Hmph! I have better things to do, but I'll humor you because I pity you. ", "Ugh why do I have to say this stuff for you?"),
     ("I'm not gonna say that. Not because I can't, obviously ..", "Eh? What was that? Speak up loser"),
     ),
     "cat": (
-    ("There. I displayed the file contents. Read them carefully, okay?", "I finished Cat. I suppose that was a useful little inspection."),
-    ("I couldn't read that file!? W-wait, where did it go?", "Cat failed!? Hmph, that file is hiding from me."),
+    ("What does this even mean...?", "Ugh I guess I'll read it."),
+    ("I-I dont see that...", "Um ..."),
     ),
     "grep": (
     ("I finished the search. Not for you, of course.", "I finished searching. Look for it yourself next time, idiot."),
     ("Huh?! Where did you see that??", "I couldn't finish searching. Hmph, how tedious."),
-    ),
-    "sed": (
-    ("I applied Sed's instructions. Hope you didn't make any mistakes.", "I finished editing the stream. Your text should be suitably transformed."),
-    ("Sed rejected that!? W-wait, since when was it so picky?", "I couldn't make the edit happen. That was embarrassing..."),
     ),
     "awk": (
     ("I processed the data with Awk. Tidy little columns, aren't they?", "I prepared the report. Your fields behaved themselves for once."),
     ("Uh oh. E-Eh, don't look at me like that!", "I couldn't run the data script..."),
     ),
     "sort": (
-    ("I put the lines in order. Much less chaotic.", "I finished sorting. At least SOMETHING knows where it belongs."),
+    ("I put the lines in order. Honestly, you're a mess.", "I finished sorting. At least SOMETHING knows where it belongs."),
     ("I couldn't sort that!? Everything is still chaotic!", "Sorting failed!? W-wait, I had it all arranged!"),
-    ),
-    "uniq": (
-    ("I removed the duplicate lines. A little less clutter suits you. I guess...", "I finished Uniq. Not like I wanted to do it for you or anything."),
-    ("Uniq failed!? Even the duplicates are ganging up on me!", "I couldn't remove those duplicates. Hmph, they won this round."),
     ),
     "wc": (
     ("I finished the count. Numbers make things look so organized.", "I counted it all with Wc. Now you know exactly how much there is."),
@@ -129,63 +139,47 @@ COMMAND_REACTIONS = {
     ),
     "kill": (
     ("I sent the signal. Hopefully that process listened.", "I finished Kill. Maybe I'll kill you next time... baka."),
-    ("I couldn't send the signal!? It ignored me!", "Kill failed!? Maybe the process escaped..."),
+    ("I couldn't send the signal!? It ignored me!", "Kill failed!? Rrrrrrgh..."),
     ),
     "which": (
     ("I found the executable. Your PATH is behaving itself today.", "Ugh is this what you were looking for?"),
     ("I don't see that command. Don't go sending me on wild goose chases, you nerd", "What are you even talking about? I don't think that exists idiot."),
     ),
     "man": (
-    ("The manual is open. Maybe Read it before asking the same question again, baka.", "Man found the documentation. The answer is probably in 1, there."),
-    ("W-wait, there is no manual page!?", "The documentation is missing!? Even I am speechless."),
+    ("The manual is open. Maybe read it before asking the same question again, baka.", "Man found the documentation. The answer is probably in 1, there."),
+    ("Must be too pathetic of a command to even have a page.", "Idiot. Nobody cares enough to write a manual for that."),
     ),
     "ssh": (
     ("The remote session completed. Networking can be useful, I suppose.", "SSH connected or finished successfully. Don't forget to log out."),
     ("W-wait, SSH failed!? The remote side rejected me! Now I know how you feel...", "The remote machine refused me!? Hmph, how impolite."),
     ),
     "ping": (
-    ("The host answered. At least something on the network is alive.", "Ping got replies. Your connection is not completely hopeless."),
+    ("The host answered. At least SOMEONE will actually talk to me.", "Ping got replies. What would you do without me hm?"),
     ("Huh!? No reply came back!? Did the network disappear?", "Ping failed... the network is being difficult again!?"),
     ),
     "ip": (
     ("Here's the network info you wanted so bad.", "Heh. I could leak these details, but I uhh don't care enough to do that."),
-    ("Ip failed!? Man...", "The network query failed!? That's concerning... Not that I'm concerned, just..."),
+    ("Ip failed!? Man...", "That's concerning... Not that I'm concerned, just..."),
     ),
     "wget": (
     ("The download finished. Hmph... at least the connection held.", "Wget retrieved the file. Try not to download it twice."),
     ("The download failed!? Ugh now I have to do it again.", "H-how disappointing. Nothing here."),
     ),
-    "snap": (
-    ("Snap finished. The package is handled, apparently.", "Snap completed its task. Hmph... that was acceptable."),
-    ("Snap failed!? E-Eh, it was supposed to be simple!", "The snap operation stopped!? Hmph, what a nuisance."),
-    ),
     "journalctl": (
     ("The journal is open. Logs do not lie, so pay attention.", "Journalctl displayed the records. There may be a clue in there."),
     ("The journal won't open!? W-wait, I wanted to know what happened...", "Journalctl failed!? Even the logs are keeping secrets."),
     ),
-    "git": (
-    ("Huh? Another Git command? F-fine... I ran it. Your code earned that much.", "I handled Git. N-not that I was watching it that closely."),
-    ("Oh... I rejected that Git command!?", "Git failed!? M-maybe it is having a bad day too."),
-    ),
     "python": (
-    ("I ran your Python successfully. I-I guess that was pretty good.", "I executed the script. I was only watching to see if you failed so I could make fun of you, obviously."),
+    ("P-python!?. Better not be trying to replace me. Not that I care if you do or anything.", "I executed the script. I was only watching to see if you failed so I could make fun of you, obviously."),
     ("I found a Python problem!? E-Eh, don't blame me!", "I couldn't run your Python. D-don't look at me like that."),
     ),
     "node": (
     ("I ran Node. Y-your dependencies survived. That's good, I guess.", "I executed the JavaScript. Where's my praise? Not that I want you to praise me or anything."),
     ("I couldn't run Node!? W-wait, your JavaScript rebelled!", "Your JavaScript didn't behave!? Hmph, how dramatic."),
     ),
-    "npm": (
-    ("The package command worked. Your lockfile is safe for now... yay, I guess.", "Dependencies installed. P-please don't delete them again."),
-    ("npm failed!? E-Eh, the packages are acting up!", "The npm command failed!? Don't blame my shell!"),
-    ),
     "docker": (
     ("The container started. I-I guess it looks stable enough.", "Docker finished. Don't stare at me, it was nothing special."),
     ("Docker failed!? The container won't listen to me!", "The container didn't start!? W-wait, where did it go?"),
-    ),
-    "kubectl": (
-    ("The cluster listened. K-keep your context under control, okay?", "The pod command worked. N-not that I was worried about it."),
-    ("Kubernetes rejected that!? The cluster is being difficult!", "The cluster disagreed!? I-I thought we were friends..."),
     ),
     "curl": (
     ("I brought the response back. Hmph... You owe me.", "I got an answer from the server. Y-you may continue now, I suppose."),
@@ -197,20 +191,20 @@ COMMAND_REACTIONS = {
     ),
     "ls": (
     ("There. I listed the files right where you left them. You're welcome.", "I found your files. I-it wasn't difficult or anything."),
-    ("I couldn't list those files!? Where did they go?", "That directory isn't cooperating with me. Hmph!"),
+    ("Umm...I don't see anything?", "Ugh if you're going to ask me to do something so tedious, make sure theres actually something to work with."),
     ),
     "rm": (
     ("It's gone. Don't blame me if that wasn't what you wanted to do.", "Ugh why do I have to do everything for you? Fine, just this once."),
     ("Eh!? N-nothing was deleted this time!", "W-wait, that was not the plan. Delete it again!"),
     ),
     "cd": (
-    ("I moved the shell into that directory. T-try not to get lost, okay?", "There. My prompt is where you asked it to be. N-not that I was worried."),
-    ("I couldn't enter that directory. Are you just making stuff up?"
-    , "You can't go there!? Hmph, it rejected my prompt."),
+    ("Am I a chauffeur to you or something?", "Can't even find your way around your own compute? How cut- AHEM. How pathetic."),
+    ("Umm... where?"
+    , "Rrgh! Stop making me look for nonsense places!"),
     ),
     "pwd": (
-    ("I checked my current directory. T-try not to get lost again, honestly.", "There is my location. Y-you're welcome."),
-    ("I couldn't determine my current directory. That's... almost impressive.", "Eh!? Where am I. T-try again. Baka"),
+    ("You really don't know where you are?! F-fine I guess I'll tell you. T-try not to get lost again, baka.", "Seriously? H-here, keep track of where you are next time, loser."),
+    ("I'm... Uhh... give me a second dammit!", "Eh?! W-where are you? I-I can't find you..."),
     ),
     "pushd": (
     ("Directory saved and changed. Hmph... e-efficient, I guess.", "Your directory stack is behaving itself. For once."),
@@ -222,7 +216,7 @@ COMMAND_REACTIONS = {
     ),
     "find": (
     ("I found what you asked for. Y-you're welcome, I guess.", "The search completed. S-satisfied now?"),
-    ("The search failed!? Don't waste my time, idiot.", "Find failed!? What a waste of time."),
+    ("Don't waste my time, idiot.", "*sigh* What a waste of time."),
     ),
     "tree": (
     ("There is the whole directory tree. D-don't get lost in it. I won't come looking for you.", "The tree is displayed. It wasn't complicated or anything."),
@@ -237,8 +231,8 @@ COMMAND_REACTIONS = {
     ("That directory won't go away!?", "Rmdir failed!? Hmph, it is clinging on."),
     ),
     "du": (
-    ("There's your disk usage. M-maybe stop collecting files now?", "Disk usage calculated. Now you know where the space went."),
-    ("I couldn't measure that directory!?", "Du failed!? I lost track of the space."),
+    ("Disk usage? I guess I can show you...", "Here. You sure have a lot of useless stuff .."),
+    ("Gosh how much stuff do you HAVE in there? Or are you just an idiot", "hmm..."),
     ),
     "df": (
     ("Your filesystem report is ready. K-keep an eye on that free space.", "Disk space checked successfully. Don't fill it again, okay?"),
@@ -246,6 +240,9 @@ COMMAND_REACTIONS = {
     ),
 }
 
+#----------------------#
+#Live facial reactions
+#----------------------#
 
 def reaction(command: str, exit_code: int, *, rng: random.Random) -> str:
     """Choose a command-aware reaction without changing the command's result."""
@@ -278,41 +275,211 @@ def reaction(command: str, exit_code: int, *, rng: random.Random) -> str:
         if command_reactions:
             choices = command_reactions[0 if exit_code == 0 else 1]
         else:
-            choices = ROOT_SUCCESS_REACTIONS if exit_code == 0 else ROOT_FAILURE_REACTIONS
-        return rng.choice(choices)
+            choices = ROOT_SUCCESS_REACTIONS if exit_code == 0 else ("",)
+        selected_reaction = rng.choice(choices)
+        return selected_reaction
 
     command_reactions = COMMAND_REACTIONS.get(command_name)
     if command_reactions:
         choices = command_reactions[0 if exit_code == 0 else 1]
     else:
-        choices = SUCCESS_REACTIONS if exit_code == 0 else FAILURE_REACTIONS
-    return rng.choice(choices)
+        choices = ("",)
+    selected_reaction = rng.choice(choices)
+    return selected_reaction
 
 
-def run_command(command: str, *, rng: random.Random) -> int:
+def run_command(
+    command: str,
+    *,
+    rng: random.Random,
+    face_process: subprocess.Popen[str] | None = None,
+) -> int:
     """Run a command through the user's shell and return its exit code."""
-    completed = subprocess.run(command, shell=True, check=False)
-    print(f"\n[ bash-chan ] {reaction(command, completed.returncode, rng=rng)}")
+    face_paused = face_process is not None and face_process.poll() is None
+    if face_paused:
+        try:
+            face_process.send_signal(signal.SIGSTOP)
+            clear_face()
+        except ProcessLookupError:
+            face_paused = False
+    try:
+        completed = subprocess.run(command, shell=True, check=False)
+    finally:
+        if face_paused:
+            try:
+                face_process.send_signal(signal.SIGCONT)
+            except ProcessLookupError:
+                pass
+    reaction_text = reaction(command, completed.returncode, rng=rng)
+    print(f"\n[ bash-chan ] {reaction_text}")
+    if face_process is not None and face_process.stdin is not None:
+        try:
+            face_process.stdin.write(f"{emotion_for(reaction_text, completed.returncode)}\n")
+            face_process.stdin.flush()
+        except (BrokenPipeError, OSError):
+            pass
     return completed.returncode
+
+
+def clear_face() -> None:
+    """Clear the face's top terminal row while its process is paused."""
+    sys.stdout.write("\0337\033[1;1H\033[2K\0338")
+    sys.stdout.flush()
+
+
+def history_path() -> pathlib.Path:
+    """Use the user's normal shell history file for interactive commands."""
+    configured_path = os.environ.get("HISTFILE")
+    if configured_path:
+        return pathlib.Path(os.path.expanduser(configured_path))
+    return pathlib.Path.home() / ".bash_history"
+
+
+def start_face() -> subprocess.Popen[str] | None:
+    """Start the independent face animation when attached to a terminal."""
+    if not sys.stdout.isatty():
+        return None
+    ready_read, ready_write = os.pipe()
+    environment = os.environ.copy()
+    environment["BASH_CHAN_FACE_READY_FD"] = str(ready_write)
+    try:
+        face_process = subprocess.Popen(
+            [sys.executable, str(pathlib.Path(__file__)), "--face"],
+            stdin=subprocess.PIPE,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+            env=environment,
+            pass_fds=(ready_write,),
+            start_new_session=True,
+            text=True,
+        )
+        os.close(ready_write)
+        os.read(ready_read, 5)
+        os.close(ready_read)
+        return face_process
+    except OSError:
+        os.close(ready_read)
+        os.close(ready_write)
+        return None
+
+
+def load_history() -> pathlib.Path:
+    """Load existing shell history and return the file to update on exit."""
+    path = history_path()
+    try:
+        readline.read_history_file(path)
+    except FileNotFoundError:
+        pass
+    except OSError:
+        pass
+    return path
+
+
+def save_history(path: pathlib.Path) -> None:
+    """Persist commands entered during the interactive session."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        readline.write_history_file(path)
+    except OSError:
+        pass
+
+
+def shell_prompt() -> str:
+    """Build a familiar shell prompt for the current location."""
+    current_directory = pathlib.Path.cwd()
+    home_directory = pathlib.Path.home()
+    try:
+        relative_directory = current_directory.relative_to(home_directory)
+        displayed_directory = "~" if relative_directory == pathlib.Path(".") else f"~/{relative_directory}"
+    except ValueError:
+        displayed_directory = str(current_directory)
+    return f"{getpass.getuser()}@{socket.gethostname()}:{displayed_directory}$ "
 
 
 def interactive_loop(*, rng: random.Random) -> int:
     """Read and execute commands until the user exits."""
+    history_file = load_history()
+    face_process = start_face()
+    sys.stdout.write("\033[?25h")
+    sys.stdout.flush()
     print("Hmph. I'm your shell now. Type a command, or press Ctrl-D to leave.")
+    try:
+        while True:
+            try:
+                command = input(shell_prompt()).strip()
+            except (EOFError, KeyboardInterrupt):
+                print("\nHmph. Leaving already? F-fine, it's not like I wanted you to stay. Loser.")
+                return 0
+
+            if not command:
+                continue
+            if command in {"exit", "quit"}:
+                print("Fine. Go, then. It's not like I'll miss you or anything.")
+                return 0
+
+            run_command(command, rng=rng, face_process=face_process)
+    finally:
+        save_history(history_file)
+        if face_process is not None:
+            face_process.terminate()
+            try:
+                face_process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                face_process.kill()
+
+
+NEUTRAL_FACE = "(｡•ㅅ•｡)"
+BLINK_FACE = "(｡-ㅅ-｡)"
+FRAME_INTERVAL = 0.1
+BLINK_INTERVAL = 2.8
+BLINK_DURATION = 0.18
+
+
+def draw_face(face: str) -> None:
+    """Draw the face in the top-right while preserving the input cursor."""
+    columns = shutil.get_terminal_size(fallback=(80, 24)).columns
+    face = face[: max(columns - 1, 1)]
+    column = max(columns - len(face) + 1, 1)
+    sys.stdout.write(f"\0337\033[1;{column}H\033[2K{face}\0338")
+    sys.stdout.flush()
+
+
+def clear_face_screen() -> None:
+    """Remove the face from the top row when the helper exits."""
+    sys.stdout.write("\0337\033[1;1H\033[2K\0338")
+    sys.stdout.flush()
+
+
+def stop_face(_signum: int, _frame: object) -> None:
+    clear_face_screen()
+    raise SystemExit(0)
+
+
+def face_main() -> int:
+    """Render idle blinking and command-result faces in the child process."""
+    signal.signal(signal.SIGTERM, stop_face)
+    signal.signal(signal.SIGINT, stop_face)
+    started_at = time.monotonic()
+    reaction_face = None
+    draw_face(NEUTRAL_FACE)
+    ready_fd = os.environ.pop("BASH_CHAN_FACE_READY_FD", None)
+    if ready_fd is not None:
+        os.write(int(ready_fd), b"ready")
+        os.close(int(ready_fd))
     while True:
-        try:
-            command = input(f"bash-chan [{os.getcwd()}]> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\nHmph. Leaving already? F-fine, it's not like I wanted you to stay. Loser.")
-            return 0
+        readable, _, _ = select.select([sys.stdin], [], [], FRAME_INTERVAL)
+        if readable:
+            message = sys.stdin.readline().strip()
+            if not message:
+                return 0
+            reaction_face = FACE_BY_EMOTION.get(message)
 
-        if not command:
-            continue
-        if command in {"exit", "quit"}:
-            print("Fine. Go, then. It's not like I'll miss you or anything.")
-            return 0
-
-        run_command(command, rng=rng)
+        elapsed = time.monotonic() - started_at
+        if reaction_face is not None:
+            draw_face(reaction_face)
+        else:
+            blinking = elapsed % BLINK_INTERVAL < BLINK_DURATION
+            draw_face(BLINK_FACE if blinking else NEUTRAL_FACE)
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
@@ -329,7 +496,10 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = parse_args(sys.argv[1:] if argv is None else argv)
+    arguments = sys.argv[1:] if argv is None else argv
+    if arguments == ["--face"]:
+        return face_main()
+    args = parse_args(arguments)
     rng = random.SystemRandom()
 
     if not args.command:
